@@ -1,37 +1,16 @@
-// Bitácora de Terreno · permite abrir la página sin señal.
-// Si cambias index.html, sube también este archivo con un número de VERSION nuevo.
-const VERSION = 'bitacora-v1';
-const PROPIOS = ['./', './index.html', './manifest.json', './icono-192.png', './icono-512.png'];
-const EXTERNOS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(async c => {
-    await c.addAll(PROPIOS);
-    await Promise.all(EXTERNOS.map(u => fetch(u, { mode: 'no-cors' }).then(r => c.put(u, r)).catch(() => {})));
-  }).then(() => self.skipWaiting()));
-});
-
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
-});
-
+const VERSION = 'informe-rioloa-v2-1';
+const CORE = ['./', 'index.html', 'estilos.css', 'app.js', 'rioloa-logo.png', 'manifest.json', 'icono-192.png',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(CORE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET') return;                 // los envíos van directo a Google
-  if (url.hostname.endsWith('google.com') || url.hostname.endsWith('googleusercontent.com')) return;
-  // La página: primero la red (para recibir actualizaciones), si no hay señal, la copia guardada
-  if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).then(r => { caches.open(VERSION).then(c => c.put('./index.html', r.clone())); return r; })
-      .catch(() => caches.match('./index.html')));
-    return;
+  const r = e.request; if (r.method !== 'GET') return;
+  const u = new URL(r.url);
+  if (u.hostname.includes('script.google')) return;
+  if (u.origin === location.origin) {
+    // red primero, caché si no hay señal
+    e.respondWith(fetch(r).then(res => { const c = res.clone(); caches.open(VERSION).then(x => x.put(r, c)); return res; }).catch(() => caches.match(r, { ignoreSearch: true }).then(m => m || caches.match('index.html'))));
+  } else {
+    e.respondWith(caches.match(r).then(m => m || fetch(r).then(res => { const c = res.clone(); caches.open(VERSION).then(x => x.put(r, c)); return res; })));
   }
-  // Lo demás (íconos, librerías, tipografías): primero la copia guardada
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
-    if (r.ok || r.type === 'opaque') { const cp = r.clone(); caches.open(VERSION).then(c => c.put(e.request, cp)); }
-    return r;
-  })));
 });
